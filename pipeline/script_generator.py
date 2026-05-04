@@ -1,138 +1,191 @@
 import os
-import time
+import re
+import json
 import random
+import time
 from groq import Groq
 
-NIGERIAN_NAMES = [
-    'Adaeze','Chiamaka','Ngozi','Yetunde','Amara','Chisom','Teniola','Nneka','Zainab','Hauwa',
-    'Emeka','Chukwudi','Olumide','Taiwo','Ifeanyi','Obinna','Babatunde','Seun','Ahmed','Kelechi',
-    'Folake','Sade','Blessing','Aisha','Fatima','Femi','Ayo','Musa','Ibrahim','Chibuike'
-]
-LOCATIONS = [
-    'Victoria Island glass tower','Lekki Phase 1 estate','Surulere back streets',
-    'Eko Atlantic waterfront','Abuja Maitama district','Enugu coal camp',
-    'Calabar waterside','Kano old city walls','Port Harcourt oil district',
-    'Lagos Island bridge market','Onitsha main market','Ikoyi colonial mansion'
-]
-TWISTS = [
-    'the villain is revealed to be protecting a dying child',
-    'the hero unknowingly caused the very problem they are solving',
-    'a trusted ally is exposed as working for the enemy',
-    'a character believed dead returns at the most critical moment',
-    'the prize they fought for turns out to be worthless',
-    'two enemies discover they share the same bloodline',
-    'the final betrayal comes from the most trusted person'
-]
-
-BLUEPRINTS = {
-    'folklore': [
-        {'type':'A powerful female priestess must break a generational curse even if it kills her','setting':'Sacred forest kingdom with rivers, spirit realms and ancient shrines','conflict':'Personal love vs sacred duty to her people','tone':'Epic, mythological, deeply emotional'},
-        {'type':'A hunted young man with forbidden ancestral powers discovers his true identity changes who his enemies are','setting':'Coastal fishing village being swallowed by a modern city','conflict':'Identity, survival and the weight of a destiny he never chose','tone':'Dark supernatural thriller, fast-paced mystery'},
-        {'type':'An aging keeper of forbidden knowledge must choose one unlikely successor before dark forces destroy their lineage','setting':'Underground cave networks beneath a royal marketplace','conflict':'Legacy vs survival — what knowledge is worth dying to protect','tone':'Philosophical, tense, bittersweet'}
+STORY_BLUEPRINTS = {
+    "folklore": [
+        {"setup": "A village priestess carries a 200-year-old curse that activates when a stranger arrives bearing an ancient mask", "protagonist": "female priestess", "conflict": "break the curse before it consumes the village"},
+        {"setup": "A young man discovers he is the last living descendant of a spirit-hunter clan, and the forest spirits want him dead before he remembers his power", "protagonist": "young male descendant", "conflict": "remember ancestral power before spirits destroy him"},
+        {"setup": "An aging village elder must pass forbidden knowledge to an unworthy successor before a supernatural drought kills everyone", "protagonist": "aging elder", "conflict": "find a worthy successor among corrupted youth"},
     ],
-    'office': [
-        {'type':'A sharp junior analyst discovers her CEO is laundering billions and must expose him before he erases her','setting':'Glass-tower corporate headquarters in Lagos Island','conflict':'Integrity vs career vs personal safety','tone':'Corporate thriller, paranoid tension, fast-paced'},
-        {'type':'Two rival executives secretly in love compete to destroy each other for the CEO position','setting':'Government-linked construction empire in Abuja','conflict':'Ambition vs love — when winning means losing everything','tone':'Dramatic, romantic, morally complex'},
-        {'type':'A new HR manager hired to fix a toxic company discovers the rot starts at the very board that hired her','setting':'Nigerian subsidiary of a collapsing multinational bank','conflict':'Ethics vs institutional power — one woman vs an entire system','tone':'Intelligent, satirical, slow-burn suspense'}
+    "office drama": [
+        {"setup": "A junior financial analyst discovers the CEO has been laundering money through a charity fund and must expose the truth before being framed", "protagonist": "junior analyst", "conflict": "expose corruption without becoming the scapegoat"},
+        {"setup": "Two rival department heads competing for the same VP position fall in love, creating an impossible conflict between ambition and heart", "protagonist": "female department head", "conflict": "choose career or love when both are at stake"},
+        {"setup": "An HR manager discovers the board is secretly planning to fire 200 workers and must organize resistance using only internal company rules", "protagonist": "HR manager", "conflict": "protect workers using the system against itself"},
     ],
-    'corporate': [
-        {'type':'A whistleblower inside Nigeria largest oil company must release documents that could bring down the government','setting':'Port Harcourt oil headquarters and Abuja corridors of power','conflict':'Truth vs survival in a country where truth gets people killed','tone':'Political thriller, urgent, high-stakes'},
-        {'type':'A self-made billionaire empire crumbles when his long-lost daughter returns knowing what he buried to get rich','setting':'Lagos penthouse boardrooms and village flashbacks','conflict':'Family, guilt, legacy and the price of dirty money','tone':'Dynasty drama, emotional, explosive reveals'},
-        {'type':'Three business partners are torn apart when one secretly sells their company to a foreign conglomerate','setting':'Yaba tech hub and London boardroom negotiations','conflict':'Friendship, betrayal and what success really costs','tone':'Modern drama, tense, bittersweet'}
+    "corporate": [
+        {"setup": "A geologist at a major oil company discovers falsified environmental reports that will poison a river delta, risking career and life to go public", "protagonist": "female geologist", "conflict": "expose environmental crime while avoiding assassination"},
+        {"setup": "A billionaire's daughter returns from abroad to find her father's empire built on land stolen from her mother's village", "protagonist": "returning daughter", "conflict": "dismantle father's empire or find a path to real justice"},
+        {"setup": "Two business partners who built a tech startup from nothing discover their investor has been secretly stealing their IP to launch a competitor", "protagonist": "male co-founder", "conflict": "reclaim stolen intellectual property before the company collapses"},
     ],
-    'romance': [
-        {'type':'A fiercely independent Lagos architect falls for the man hired to demolish the historic building she is trying to save','setting':'Historic Lagos Island building under threat of demolition','conflict':'Love vs ambition — can two opposite worlds build something together','tone':'Warm, witty, emotionally rich'},
-        {'type':'Two strangers discover they were secretly set up by their late grandmothers through letters written 40 years ago','setting':'Enugu family home, Lagos markets, Abuja rooftop restaurants','conflict':'Grief, destiny, trusting love when life has already broken you','tone':'Tender, healing, quietly beautiful'},
-        {'type':'A successful Abuja woman returns home for her sister wedding and falls for the one man her family will never accept','setting':'Delta State village wedding, Lagos flashbacks, family compound','conflict':'Family loyalty vs personal happiness vs tribe and class expectations','tone':'Dramatic, culturally rich, funny and painful'}
+    "romance": [
+        {"setup": "An architect hired to design a luxury tower falls in love with the community organizer fighting to stop demolition of the neighborhood it will replace", "protagonist": "female architect", "conflict": "choose contract or conscience and the man fighting her work"},
+        {"setup": "Two strangers discover their late grandmothers were lifelong lovers separated by a family feud, and must decide whether to honor or end the feud", "protagonist": "male grandson", "conflict": "honor a hidden love story or preserve family pride"},
+        {"setup": "A woman promised in marriage to a wealthy chief secretly loves the village teacher, and the wedding is only three days away", "protagonist": "betrothed woman", "conflict": "escape an arranged marriage without destroying family honor"},
     ],
-    'action': [
-        {'type':'A retired military operative is pulled back in when her son is kidnapped by the cartel she dismantled ten years ago','setting':'Lagos slums, expressway chases, Apapa port warehouses','conflict':'A mother love vs a soldier code — the line she swore never to cross again','tone':'High-octane, emotional, relentless'},
-        {'type':'A Lagos fixer hired to recover a stolen hard drive discovers it contains evidence that could bring down the government','setting':'Lagos underground, Eko Bridge, Abuja safe houses, airport','conflict':'Self-preservation vs doing the right thing when everyone wants you dead','tone':'Fast, sharp, morally grey, entertaining'},
-        {'type':'Two rival gang leaders at war for a decade discover they were both manipulated by the same corrupt police chief','setting':'Oshodi, Mushin, Lagos waterways, police precinct siege','conflict':'Enemy of my enemy — can two killers trust each other long enough to survive','tone':'Gritty, tense, unexpected brotherhood'}
-    ]
+    "action": [
+        {"setup": "A former soldier turned caterer discovers her teenage son has been recruited by a drug cartel and goes to war to get him back", "protagonist": "female former soldier", "conflict": "extract son from cartel without getting both of them killed"},
+        {"setup": "A fixer who cleans up crimes for the elite finds a hard drive linking the president to political murders and must decide what to do with it", "protagonist": "male fixer", "conflict": "use evidence for justice or trade it for personal survival"},
+        {"setup": "Two rival gang leaders must form an unlikely alliance when a corrupt police chief plans to frame both of them for a massacre", "protagonist": "female gang leader", "conflict": "trust the enemy to defeat the real threat"},
+    ],
 }
 
-def generate_scripts(genre='folklore', research_themes=None):
-    api_key = os.environ.get('GROQ_API_KEY')
+NIGERIAN_NAMES = ["Adaeze", "Chukwuemeka", "Funmilayo", "Babatunde", "Ngozi", "Emeka",
+                  "Chioma", "Taiwo", "Amaka", "Seun", "Tobi", "Yetunde", "Ifeanyi", "Adeola"]
+ALL_LOCATIONS = ["Lekki Phase 1", "Victoria Island", "Surulere", "Ikeja GRA", "Yaba",
+                 "Awka Etiti", "Oyo town", "Badagry", "Calabar waterfront", "Arochukwu forest",
+                 "Ile-Ife sacred grove", "Kano old city", "Benin Kingdom palace", "Owerri"]
+PLOT_TWISTS = [
+    "the antagonist is revealed to be the protagonist's long-lost sibling",
+    "the hero discovers they have been manipulated from the very beginning",
+    "a trusted ally switches sides at the worst possible moment",
+    "the solution requires the hero to sacrifice what they love most",
+    "everything the hero believed about their past is a carefully constructed lie",
+]
+
+
+def _get_blueprints(genre):
+    key = genre.lower().strip()
+    blueprints = STORY_BLUEPRINTS.get(key, STORY_BLUEPRINTS["folklore"])
+    return random.sample(blueprints, min(3, len(blueprints)))
+
+
+def generate_scripts(genre, progress_callback=None):
+    api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
-        return {'error': 'Groq API key not configured', 'scripts': []}
+        raise ValueError("GROQ_API_KEY not set")
 
     client = Groq(api_key=api_key)
-    blueprints = BLUEPRINTS.get(genre, BLUEPRINTS['folklore'])
-    themes = ', '.join(research_themes) if research_themes else 'Nigerian storytelling'
-    scripts = []
 
-    for i in range(3):
-        if i > 0:
-            time.sleep(25)
-        letter = ['A','B','C'][i]
-        bp = blueprints[i]
-        name1 = random.choice(NIGERIAN_NAMES)
-        name2 = random.choice([n for n in NIGERIAN_NAMES if n != name1])
-        location = random.choice(LOCATIONS)
-        twist = random.choice(TWISTS)
+    names = random.sample(NIGERIAN_NAMES, 4)
+    location = random.choice(ALL_LOCATIONS)
+    twist = random.choice(PLOT_TWISTS)
+    blueprints = _get_blueprints(genre)
 
-        prompt = f"""You are a professional Nigerian screenwriter. Write SCRIPT OPTION {letter}.
+    if progress_callback:
+        progress_callback("Building 3 story blueprints...", 10)
 
-MANDATORY STORY (follow exactly — this is a {genre.upper()} story):
-Story: {bp['type']}
-Setting: {bp['setting']}
-Conflict: {bp['conflict']}
-Tone: {bp['tone']}
+    prompt = f"""You are a master Nigerian storyteller and Nollywood scriptwriter.
 
-UNIQUE ELEMENTS FOR THIS RUN:
-Lead character: {name1}
-Supporting character: {name2}
-Key location: {location}
-Final act twist: {twist}
-Trending themes: {themes}
+Genre: {genre}
+Nigerian names to use across stories: {', '.join(names)}
+Key Nigerian location: {location}
+Mandatory plot twist to weave in (for at least one story): {twist}
 
-OUTPUT FORMAT:
-TITLE: Film Title Here
-LOGLINE: One sentence that sells this film
+Generate 3 COMPLETELY DIFFERENT scripts — different characters, different settings, different plots.
 
-Then EXACTLY 40 scenes:
-SCENE_01|Scene Title|What the camera sees max 20 words|Narration spoken aloud max 30 words|mood
+STORY A: {blueprints[0]['setup']}
+Protagonist type: {blueprints[0]['protagonist']}
+Core conflict: {blueprints[0]['conflict']}
 
-Write all 40 scenes. Nothing else."""
+STORY B: {blueprints[1]['setup']}
+Protagonist type: {blueprints[1]['protagonist']}
+Core conflict: {blueprints[1]['conflict']}
 
-        for attempt in range(2):
-            try:
-                resp = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role":"user","content":prompt}],
-                    max_tokens=4000,
-                    temperature=0.9
-                )
-                scripts.append(parse_script(resp.choices[0].message.content, letter))
-                break
-            except Exception as e:
-                if attempt == 0 and 'rate' in str(e).lower():
-                    time.sleep(30)
-                else:
-                    scripts.append({'option':letter,'title':f'Option {letter}','logline':'','scenes':[],'error':str(e),'scene_count':0})
-                    break
+STORY C: {blueprints[2]['setup']}
+Protagonist type: {blueprints[2]['protagonist']}
+Core conflict: {blueprints[2]['conflict']}
 
-    return {'scripts': scripts}
+Write exactly 25 scenes per script. Use this compact pipe-separated format (one scene per line):
+SCENE_XX|Scene Title|Xs|What the camera sees (specific colors, textures, actions, Nigerian setting)|Words spoken by narrator (20-40 words)|mood|sound/music
 
-def parse_script(text, letter):
-    lines = text.strip().split('\n')
-    title, logline, scenes = f'Script {letter}', '', []
-    for line in lines:
-        line = line.strip()
-        if line.startswith('TITLE:'):
-            title = line[6:].strip()
-        elif line.startswith('LOGLINE:'):
-            logline = line[8:].strip()
-        elif line.startswith('SCENE_'):
-            parts = line.split('|')
-            if len(parts) >= 4:
-                scenes.append({
-                    'id': parts[0].strip(),
-                    'title': parts[1].strip() if len(parts)>1 else '',
-                    'visual': parts[2].strip().replace('Visual:','').strip() if len(parts)>2 else '',
-                    'narration': parts[3].strip().replace('Narration:','').strip() if len(parts)>3 else '',
-                    'mood': parts[4].strip() if len(parts)>4 else 'dramatic',
-                    'duration': 12, 'status': 'pending', 'video_path': None
-                })
-    return {'option':letter,'title':title,'logline':logline,'scenes':scenes,'scene_count':len(scenes)}
+Rules:
+- Scenes 8-15 seconds each
+- Visuals must be specific and physical — no abstract descriptions
+- Each story must feel like a completely different film
+- Strong opening hook on SCENE_01, emotional climax around SCENE_20, resolution by SCENE_25
+
+Output exactly this structure:
+
+=== SCRIPT A: [Unique Film Title] ===
+LOGLINE: [One punchy sentence]
+SCENE_01|...|...|...|...|...|...
+SCENE_02|...|...|...|...|...|...
+[continue to SCENE_25]
+
+=== SCRIPT B: [Unique Film Title] ===
+LOGLINE: [One punchy sentence]
+SCENE_01|...|...|...|...|...|...
+[continue to SCENE_25]
+
+=== SCRIPT C: [Unique Film Title] ===
+LOGLINE: [One punchy sentence]
+SCENE_01|...|...|...|...|...|...
+[continue to SCENE_25]"""
+
+    if progress_callback:
+        progress_callback("Generating all 3 scripts — single optimised call...", 25)
+
+    for attempt in range(2):
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.9,
+                max_tokens=7000,
+            )
+            full_text = response.choices[0].message.content
+            break
+        except Exception as e:
+            err = str(e).lower()
+            if "rate_limit" in err and attempt == 0:
+                if progress_callback:
+                    progress_callback("Rate limit hit — waiting 35 seconds then retrying...", 25)
+                time.sleep(35)
+            else:
+                raise
+
+    if progress_callback:
+        progress_callback("Parsing and saving scripts...", 85)
+
+    scripts = _parse_scripts(full_text)
+
+    os.makedirs(".tmp", exist_ok=True)
+    summaries = {}
+    for letter in ["A", "B", "C"]:
+        content = scripts.get(letter, f"# Script {letter}\n\n(Generation incomplete — please regenerate)")
+        with open(f".tmp/script_option_{letter}.md", "w", encoding="utf-8") as f:
+            f.write(content)
+        summaries[letter] = _extract_summary(content, letter)
+
+    if progress_callback:
+        progress_callback("All 3 scripts ready!", 100)
+
+    return summaries
+
+
+def _parse_scripts(text):
+    scripts = {}
+    parts = re.split(r'===\s*SCRIPT\s+([A-C]):', text, flags=re.IGNORECASE)
+    # parts = [before_A, 'A', A_title+content, 'B', B_title+content, 'C', C_title+content]
+    if len(parts) >= 7:
+        for i, letter in enumerate(["A", "B", "C"]):
+            section_raw = parts[i * 2 + 2]
+            lines = section_raw.strip().split("\n")
+            title = lines[0].strip().rstrip("=").strip() if lines else f"Story {letter}"
+            body = "\n".join(lines[1:]).strip()
+            scripts[letter] = f"# Script Option {letter}: {title}\n\n{body}"
+    else:
+        # Fallback: grab by SCRIPT X marker
+        for letter in ["A", "B", "C"]:
+            m = re.search(
+                rf'SCRIPT\s+{letter}[:\s]+(.*?)(?=SCRIPT\s+[A-C]|$)',
+                text, re.IGNORECASE | re.DOTALL
+            )
+            scripts[letter] = f"# Script Option {letter}\n\n{m.group(1).strip()}" if m else ""
+    return scripts
+
+
+def _extract_summary(script_text, letter):
+    title, logline = f"Story {letter}", ""
+    for line in script_text.split("\n")[:15]:
+        if line.startswith("# Script Option"):
+            parts = line.split(":", 1)
+            if len(parts) > 1:
+                title = parts[1].strip()
+        elif line.upper().startswith("LOGLINE:"):
+            logline = line.split(":", 1)[1].strip() if ":" in line else ""
+    return {"title": title, "logline": logline}
