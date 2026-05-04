@@ -35,20 +35,17 @@ def research_youtube():
             data = resp.json()
             if 'items' not in data:
                 continue
-
             video_ids = [item['id']['videoId'] for item in data['items']]
             stats_resp = requests.get('https://www.googleapis.com/youtube/v3/videos', params={
                 'part': 'statistics', 'id': ','.join(video_ids), 'key': api_key
             }, timeout=10)
             stats_map = {i['id']: i.get('statistics', {}) for i in stats_resp.json().get('items', [])}
-
             for item in data['items']:
                 vid = item['id']['videoId']
                 if vid in seen_ids:
                     continue
                 seen_ids.add(vid)
-                stats = stats_map.get(vid, {})
-                views = int(stats.get('viewCount', 0))
+                views = int(stats_map.get(vid, {}).get('viewCount', 0))
                 all_results.append({
                     'id': vid,
                     'title': item['snippet']['title'],
