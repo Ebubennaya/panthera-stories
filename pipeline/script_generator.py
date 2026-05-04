@@ -53,7 +53,7 @@ def _get_blueprints(genre):
     return random.sample(blueprints, min(3, len(blueprints)))
 
 
-def generate_scripts(genre, progress_callback=None):
+def generate_scripts(genre, progress_callback=None, research_themes=None):
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise ValueError("GROQ_API_KEY not set")
