@@ -1,6 +1,5 @@
 import os
 import re
-import json
 import random
 import time
 from groq import Groq
@@ -8,7 +7,7 @@ from groq import Groq
 STORY_BLUEPRINTS = {
     "folklore": [
         {"setup": "A village priestess carries a 200-year-old curse that activates when a stranger arrives bearing an ancient mask", "protagonist": "female priestess", "conflict": "break the curse before it consumes the village"},
-        {"setup": "A young man discovers he is the last living descendant of a spirit-hunter clan, and the forest spirits want him dead before he remembers his power", "protagonist": "young male descendant", "conflict": "remember ancestral power before spirits destroy him"},
+        {"setup": "A young man discovers he is the last living descendant of a spirit-hunter clan, and the forest spirits want him dead before he remembers his power", "protagonist": "young male descendant", "conflict": "remember ancestral power before the spirits destroy him"},
         {"setup": "An aging village elder must pass forbidden knowledge to an unworthy successor before a supernatural drought kills everyone", "protagonist": "aging elder", "conflict": "find a worthy successor among corrupted youth"},
     ],
     "office drama": [
@@ -27,7 +26,7 @@ STORY_BLUEPRINTS = {
         {"setup": "A woman promised in marriage to a wealthy chief secretly loves the village teacher, and the wedding is only three days away", "protagonist": "betrothed woman", "conflict": "escape an arranged marriage without destroying family honor"},
     ],
     "action": [
-        {"setup": "A former soldier turned caterer discovers her teenage son has been recruited by a drug cartel and goes to war to get him back", "protagonist": "female former soldier", "conflict": "extract son from cartel without getting both of them killed"},
+        {"setup": "A former soldier turned caterer discovers her teenage son has been recruited by a drug cartel and goes to war to get him back", "protagonist": "female former soldier", "conflict": "extract son from cartel without getting both killed"},
         {"setup": "A fixer who cleans up crimes for the elite finds a hard drive linking the president to political murders and must decide what to do with it", "protagonist": "male fixer", "conflict": "use evidence for justice or trade it for personal survival"},
         {"setup": "Two rival gang leaders must form an unlikely alliance when a corrupt police chief plans to frame both of them for a massacre", "protagonist": "female gang leader", "conflict": "trust the enemy to defeat the real threat"},
     ],
@@ -71,53 +70,53 @@ def generate_scripts(genre, progress_callback=None, research_themes=None):
     prompt = f"""You are a master Nigerian storyteller and Nollywood scriptwriter.
 
 Genre: {genre}
-Nigerian names to use across stories: {', '.join(names)}
+Nigerian names to use: {', '.join(names)}
 Key Nigerian location: {location}
-Mandatory plot twist to weave in (for at least one story): {twist}
+Plot twist to include in at least one story: {twist}
 
 Generate 3 COMPLETELY DIFFERENT scripts — different characters, different settings, different plots.
 
 STORY A: {blueprints[0]['setup']}
-Protagonist type: {blueprints[0]['protagonist']}
+Protagonist: {blueprints[0]['protagonist']}
 Core conflict: {blueprints[0]['conflict']}
 
 STORY B: {blueprints[1]['setup']}
-Protagonist type: {blueprints[1]['protagonist']}
+Protagonist: {blueprints[1]['protagonist']}
 Core conflict: {blueprints[1]['conflict']}
 
 STORY C: {blueprints[2]['setup']}
-Protagonist type: {blueprints[2]['protagonist']}
+Protagonist: {blueprints[2]['protagonist']}
 Core conflict: {blueprints[2]['conflict']}
 
-Write exactly 25 scenes per script. Use this compact pipe-separated format (one scene per line):
-SCENE_XX|Scene Title|Xs|What the camera sees (specific colors, textures, actions, Nigerian setting)|Words spoken by narrator (20-40 words)|mood|sound/music
+Write exactly 25 scenes per script using this compact pipe-separated format (one scene per line):
+SCENE_XX|Scene Title|Xs|What camera sees (specific colors, textures, actions, Nigerian setting)|Narrator words (20-40 words)|mood|sound
 
 Rules:
 - Scenes 8-15 seconds each
-- Visuals must be specific and physical — no abstract descriptions
+- Visuals must be physical and specific, never abstract
 - Each story must feel like a completely different film
-- Strong opening hook on SCENE_01, emotional climax around SCENE_20, resolution by SCENE_25
+- Strong hook on SCENE_01, climax around SCENE_20, resolution by SCENE_25
 
-Output exactly this structure:
+Output exactly:
 
-=== SCRIPT A: [Unique Film Title] ===
+=== SCRIPT A: [Film Title] ===
 LOGLINE: [One punchy sentence]
 SCENE_01|...|...|...|...|...|...
 SCENE_02|...|...|...|...|...|...
-[continue to SCENE_25]
+[continue through SCENE_25]
 
-=== SCRIPT B: [Unique Film Title] ===
+=== SCRIPT B: [Film Title] ===
 LOGLINE: [One punchy sentence]
 SCENE_01|...|...|...|...|...|...
-[continue to SCENE_25]
+[continue through SCENE_25]
 
-=== SCRIPT C: [Unique Film Title] ===
+=== SCRIPT C: [Film Title] ===
 LOGLINE: [One punchy sentence]
 SCENE_01|...|...|...|...|...|...
-[continue to SCENE_25]"""
+[continue through SCENE_25]"""
 
     if progress_callback:
-        progress_callback("Generating all 3 scripts — single optimised call...", 25)
+        progress_callback("Generating all 3 scripts in one optimised call...", 20)
 
     for attempt in range(2):
         try:
@@ -133,7 +132,7 @@ SCENE_01|...|...|...|...|...|...
             err = str(e).lower()
             if "rate_limit" in err and attempt == 0:
                 if progress_callback:
-                    progress_callback("Rate limit hit — waiting 35 seconds then retrying...", 25)
+                    progress_callback("Rate limit hit — waiting 35 seconds then retrying...", 20)
                 time.sleep(35)
             else:
                 raise
@@ -160,7 +159,6 @@ SCENE_01|...|...|...|...|...|...
 def _parse_scripts(text):
     scripts = {}
     parts = re.split(r'===\s*SCRIPT\s+([A-C]):', text, flags=re.IGNORECASE)
-    # parts = [before_A, 'A', A_title+content, 'B', B_title+content, 'C', C_title+content]
     if len(parts) >= 7:
         for i, letter in enumerate(["A", "B", "C"]):
             section_raw = parts[i * 2 + 2]
@@ -169,7 +167,6 @@ def _parse_scripts(text):
             body = "\n".join(lines[1:]).strip()
             scripts[letter] = f"# Script Option {letter}: {title}\n\n{body}"
     else:
-        # Fallback: grab by SCRIPT X marker
         for letter in ["A", "B", "C"]:
             m = re.search(
                 rf'SCRIPT\s+{letter}[:\s]+(.*?)(?=SCRIPT\s+[A-C]|$)',
