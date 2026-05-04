@@ -1,43 +1,54 @@
 import os
 import subprocess
+import shutil
+import imageio_ffmpeg
 
-def assemble_video(scenes, output_path):
-    approved = [s for s in scenes if s.get('status') == 'approved' and s.get('video_path') and os.path.exists(s['video_path'])]
-    if not approved:
-        return {'success': False, 'error': 'No approved scenes with video files found'}
+FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 
-    concat_file = '/tmp/concat_list.txt'
-    with open(concat_file, 'w') as f:
-        for s in approved:
-            f.write(f"file '{s['video_path']}'\n")
-
-    raw = output_path.replace('.mp4', '_raw.mp4')
+def generate_scene_video(scene, output_path):
+    visual = scene.get('visual', 'cinematic Nigerian scene')
+    prompt = f"{visual}, cinematic Nigerian film, professional cinematography, dramatic lighting, 4K, realistic"
 
     try:
-        subprocess.run([
-            'ffmpeg', '-y', '-f', 'concat', '-safe', '0',
-            '-i', concat_file, '-c', 'copy', raw
-        ], capture_output=True, check=True, timeout=600)
-
-        duration_result = subprocess.run([
-            'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
-            '-of', 'default=noprint_wrappers=1:nokey=1', raw
-        ], capture_output=True, text=True)
-        duration = float(duration_result.stdout.strip() or '60')
-        fade_out_start = max(0, duration - 3)
-
-        subprocess.run([
-            'ffmpeg', '-y', '-i', raw,
-            '-vf', f'fade=t=in:st=0:d=2,fade=t=out:st={fade_out_start}:d=3',
-            '-c:a', 'copy', output_path
-        ], capture_output=True, check=True, timeout=600)
-
-        if os.path.exists(raw):
-            os.remove(raw)
-
-        return {'success': True, 'path': output_path}
-
-    except subprocess.CalledProcessError as e:
-        return {'success': False, 'error': f'Assembly failed: {e.stderr.decode() if e.stderr else str(e)}'}
+        from gradio_client import Client
+        token = os.environ.get('HUGGINGFACE_TOKEN')
+        client = Client("Wan-AI/Wan2.1-T2V-14B", hf_token=token)
+        result = client.predict(
+            prompt=prompt,
+            negative_prompt="blurry, low quality, cartoon, text, watermark",
+            num_inference_steps=20,
+            guidance_scale=7.0,
+            api_name="/generate"
+        )
+        if result and os.path.exists(str(result)):
+            shutil.copy(str(result), output_path)
+            return {'success': True, 'path': output_path}
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        print(f"HuggingFace error: {e}")
+
+    return generate_placeholder(scene, output_path)
+
+def generate_placeholder(scene, output_path):
+    colors = {
+        'dramatic': '0x1a0a00', 'tense': '0x0a0000', 'ethereal': '0x0a0a2e',
+        'romantic': '0x2e0a1a', 'triumphant': '0x002e0a', 'mysterious': '0x0a002e'
+    }
+    mood = scene.get('mood', 'dramatic').lower().replace('mood:', '').strip()
+    color = colors.get(mood, '0x1a1a1a')
+    title = scene.get('title', 'Scene').replace("'", "")[:30]
+
+    try:
+        cmd = [
+            FFMPEG, '-y',
+            '-f', 'lavfi',
+            '-i', f'color=c={color}:size=1280x720:duration=8:rate=24',
+            '-vf', f"drawtext=text='{title}':fontsize=32:fontcolor=gold:x=(w-text_w)/2:y=(h-text_h)/2",
+            '-c:v', 'libx264', '-t', '8', output_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=30)
+        if result.returncode == 0:
+            return {'success': True, 'path': output_path, 'placeholder': True}
+    except Exception as e:
+        print(f"FFmpeg error: {e}")
+
+    return {'success': False, 'error': 'Video generation failed'}
